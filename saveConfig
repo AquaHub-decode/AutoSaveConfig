@@ -1,171 +1,157 @@
 local httpService = game:GetService("HttpService")
 
 local SaveManager = {} do
-	SaveManager.Folder = "FluentSettings"
-	SaveManager.Ignore = {}
-	SaveManager.AutoSaveName = "autosave" -- Default name for auto-save
-	SaveManager.Parser = {
-		Toggle = {
-			Save = function(idx, object)
-				return { type = "Toggle", idx = idx, value = object.Value }
-			end,
-			Load = function(idx, data)
-				if SaveManager.Options[idx] then 
-					SaveManager.Options[idx]:SetValue(data.value)
-				end
-			end,
-		},
-		Slider = {
-			Save = function(idx, object)
-				return { type = "Slider", idx = idx, value = tostring(object.Value) }
-			end,
-			Load = function(idx, data)
-				if SaveManager.Options[idx] then 
-					SaveManager.Options[idx]:SetValue(data.value)
-				end
-			end,
-		},
-		Dropdown = {
-			Save = function(idx, object)
-				return { type = "Dropdown", idx = idx, value = object.Value, mutli = object.Multi }
-			end,
-			Load = function(idx, data)
-				if SaveManager.Options[idx] then 
-					SaveManager.Options[idx]:SetValue(data.value)
-				end
-			end,
-		},
-		Colorpicker = {
-			Save = function(idx, object)
-				return { type = "Colorpicker", idx = idx, value = object.Value:ToHex(), transparency = object.Transparency }
-			end,
-			Load = function(idx, data)
-				if SaveManager.Options[idx] then 
-					SaveManager.Options[idx]:SetValueRGB(Color3.fromHex(data.value), data.transparency)
-				end
-			end,
-		},
-		Keybind = {
-			Save = function(idx, object)
-				return { type = "Keybind", idx = idx, mode = object.Mode, key = object.Value }
-			end,
-			Load = function(idx, data)
-				if SaveManager.Options[idx] then 
-					SaveManager.Options[idx]:SetValue(data.key, data.mode)
-				end
-			end,
-		},
-		Input = {
-			Save = function(idx, object)
-				return { type = "Input", idx = idx, text = object.Value }
-			end,
-			Load = function(idx, data)
-				if SaveManager.Options[idx] and type(data.text) == "string" then
-					SaveManager.Options[idx]:SetValue(data.text)
-				end
-			end,
-		},
-	}
+    SaveManager.Folder = "FluentSettings"
+    SaveManager.Ignore = {}
+    SaveManager.AutoSaveName = "autosave"
+    SaveManager.Parser = {
+        Toggle = {
+            Save = function(idx, object)
+                return { type = "Toggle", idx = idx, value = object.Value }
+            end,
+            Load = function(idx, data)
+                if SaveManager.Options[idx] then
+                    SaveManager.Options[idx]:SetValue(data.value)
+                end
+            end,
+        },
+        Slider = {
+            Save = function(idx, object)
+                return { type = "Slider", idx = idx, value = tostring(object.Value) }
+            end,
+            Load = function(idx, data)
+                if SaveManager.Options[idx] then
+                    SaveManager.Options[idx]:SetValue(data.value)
+                end
+            end,
+        },
+        Dropdown = {
+            Save = function(idx, object)
+                return { type = "Dropdown", idx = idx, value = object.Value, multi = object.Multi }
+            end,
+            Load = function(idx, data)
+                if SaveManager.Options[idx] then
+                    SaveManager.Options[idx]:SetValue(data.value)
+                end
+            end,
+        },
+        Colorpicker = {
+            Save = function(idx, object)
+                return { type = "Colorpicker", idx = idx, value = object.Value:ToHex(), transparency = object.Transparency }
+            end,
+            Load = function(idx, data)
+                if SaveManager.Options[idx] then
+                    SaveManager.Options[idx]:SetValueRGB(Color3.fromHex(data.value), data.transparency)
+                end
+            end,
+        },
+        Keybind = {
+            Save = function(idx, object)
+                return { type = "Keybind", idx = idx, mode = object.Mode, key = object.Value }
+            end,
+            Load = function(idx, data)
+                if SaveManager.Options[idx] then
+                    SaveManager.Options[idx]:SetValue(data.key, data.mode)
+                end
+            end,
+        },
+        Input = {
+            Save = function(idx, object)
+                return { type = "Input", idx = idx, text = object.Value }
+            end,
+            Load = function(idx, data)
+                if SaveManager.Options[idx] and type(data.text) == "string" then
+                    SaveManager.Options[idx]:SetValue(data.text)
+                end
+            end,
+        },
+    }
 
-	-- Auto-save settings when updated
-	local function AutoSave()
-		SaveManager:Save(SaveManager.AutoSaveName)
-	end
+    function SaveManager:SetIgnoreIndexes(list)
+        for _, key in next, list do
+            self.Ignore[key] = true
+        end
+    end
 
-	-- Extend Parser to trigger auto-save
-	for key, parser in pairs(SaveManager.Parser) do
-		local originalLoad = parser.Load
-		parser.Load = function(idx, data)
-			if originalLoad then originalLoad(idx, data) end
-			AutoSave()
-		end
-	end
+    function SaveManager:SetFolder(folder)
+        self.Folder = folder
+        self:BuildFolderTree()
+    end
 
-	function SaveManager:SetIgnoreIndexes(list)
-		for _, key in next, list do
-			self.Ignore[key] = true
-		end
-	end
+    function SaveManager:Save(name)
+        if not name then
+            return false, "No config file is selected"
+        end
 
-	function SaveManager:SetFolder(folder)
-		self.Folder = folder;
-		self:BuildFolderTree()
-	end
+        local fullPath = self.Folder .. "/settings/" .. name .. ".json"
 
-	function SaveManager:Save(name)
-		if (not name) then
-			return false, "no config file is selected"
-		end
+        local data = {
+            objects = {}
+        }
 
-		local fullPath = self.Folder .. "/settings/" .. name .. ".json"
+        for idx, option in next, SaveManager.Options do
+            if not self.Parser[option.Type] then continue end
+            if self.Ignore[idx] then continue end
 
-		local data = {
-			objects = {}
-		}
+            table.insert(data.objects, self.Parser[option.Type].Save(idx, option))
+        end
 
-		for idx, option in next, SaveManager.Options do
-			if not self.Parser[option.Type] then continue end
-			if self.Ignore[idx] then continue end
+        local success, encoded = pcall(httpService.JSONEncode, httpService, data)
+        if not success then
+            return false, "Failed to encode data"
+        end
 
-			table.insert(data.objects, self.Parser[option.Type].Save(idx, option))
-		end	
+        writefile(fullPath, encoded)
+        return true
+    end
 
-		local success, encoded = pcall(httpService.JSONEncode, httpService, data)
-		if not success then
-			return false, "failed to encode data"
-		end
+    function SaveManager:Load(name)
+        if not name then
+            return false, "No config file is selected"
+        end
 
-		writefile(fullPath, encoded)
-		return true
-	end
+        local file = self.Folder .. "/settings/" .. name .. ".json"
+        if not isfile(file) then return false, "Invalid file" end
 
-	function SaveManager:Load(name)
-		if (not name) then
-			return false, "no config file is selected"
-		end
-		
-		local file = self.Folder .. "/settings/" .. name .. ".json"
-		if not isfile(file) then return false, "invalid file" end
+        local success, decoded = pcall(httpService.JSONDecode, httpService, readfile(file))
+        if not success then return false, "Decode error" end
 
-		local success, decoded = pcall(httpService.JSONDecode, httpService, readfile(file))
-		if not success then return false, "decode error" end
+        for _, option in next, decoded.objects do
+            if self.Parser[option.type] then
+                task.spawn(function() self.Parser[option.type].Load(option.idx, option) end)
+            end
+        end
 
-		for _, option in next, decoded.objects do
-			if self.Parser[option.type] then
-				task.spawn(function() self.Parser[option.type].Load(option.idx, option) end)
-			end
-		end
+        return true
+    end
 
-		return true
-	end
+    function SaveManager:LoadAutoSave()
+        local autoSavePath = self.Folder .. "/settings/" .. self.AutoSaveName .. ".json"
+        if isfile(autoSavePath) then
+            self:Load(self.AutoSaveName)
+        end
+    end
 
-	function SaveManager:LoadAutoSave()
-		if isfile(self.Folder .. "/settings/" .. self.AutoSaveName .. ".json") then
-			self:Load(self.AutoSaveName)
-		end
-	end
+    function SaveManager:BuildFolderTree()
+        local paths = {
+            self.Folder,
+            self.Folder .. "/settings"
+        }
 
-	function SaveManager:BuildFolderTree()
-		local paths = {
-			self.Folder,
-			self.Folder .. "/settings"
-		}
+        for _, str in ipairs(paths) do
+            if not isfolder(str) then
+                makefolder(str)
+            end
+        end
+    end
 
-		for i = 1, #paths do
-			local str = paths[i]
-			if not isfolder(str) then
-				makefolder(str)
-			end
-		end
-	end
-
-	function SaveManager:SetLibrary(library)
-		self.Library = library
+    function SaveManager:SetLibrary(library)
+        self.Library = library
         self.Options = library.Options
-	end
+    end
 
-	SaveManager:BuildFolderTree()
-	SaveManager:LoadAutoSave() -- Automatically load saved settings on script start
+    SaveManager:BuildFolderTree()
+    SaveManager:LoadAutoSave()
 end
 
 return SaveManager
