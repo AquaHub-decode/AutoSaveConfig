@@ -6,8 +6,9 @@ if not writefile or not readfile or not isfile then
     error("SaveManager requires an exploit with file system support (writefile, readfile, isfile)")
 end
 
--- File name for saving configurations
+-- File names for saving configurations and key
 local configFileName = "AquaConfig.json"
+local keyFileName = "autosave_key.json"  -- File to save the entered key
 
 -- Default configuration (edit this to suit your needs)
 local DEFAULT_CONFIG = {
@@ -42,6 +43,33 @@ function SaveManager:Save(config)
     if not success then
         warn("Failed to save config: " .. tostring(result))
     end
+end
+
+-- Save the key to a file
+function SaveManager:SaveKey(key)
+    local data = {
+        key = key
+    }
+    local success, encoded = pcall(game:GetService("HttpService").JSONEncode, game:GetService("HttpService"), data)
+    if not success then
+        return false, "Failed to encode key"
+    end
+
+    writefile(keyFileName, encoded)
+    return true
+end
+
+-- Load the saved key from the file
+function SaveManager:LoadKey()
+    if isfile(keyFileName) then
+        local success, decoded = pcall(game:GetService("HttpService").JSONDecode, game:GetService("HttpService"), readfile(keyFileName))
+        if success and decoded and decoded.key then
+            return decoded.key
+        end
+    end
+
+    -- Return a default value if no key is found
+    return "default_key"  -- Replace with a default key if necessary
 end
 
 return SaveManager
