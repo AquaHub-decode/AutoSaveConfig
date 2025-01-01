@@ -7,7 +7,7 @@ if not writefile or not readfile or not isfile then
 end
 
 -- File name for saving configurations
-local configFileName = "UserConfig.json"
+local configFileName = "AquaConfig.json"
 
 -- Default configuration (edit this to suit your needs)
 local DEFAULT_CONFIG = {
